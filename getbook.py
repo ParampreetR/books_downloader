@@ -44,13 +44,19 @@ def download_from_2(download_link, file_format="epub", bookname=bookname):
         file_format = "." + file_format
     bookname = bookname.replace(" ", "_")
 
-    # THIS "s" equals s = requests.Session()
-    html = s.get(download_link).text
-    direct_download = "http://libgen.lc" + [x for x in html.split('"') if "mirr" in x][0]
+    try:
+        # THIS "s" equals s = requests.Session()
+        html = s.get(download_link).text
+        direct_download = "http://libgen.lc" + [x for x in html.split('"') if "mirr" in x][0]
 
-    book_content = s.get(direct_download)
-    with open(bookname + file_format, "wb") as r:
-        r.write(book_content.content)
+        book_content = s.get(direct_download)
+        with open(bookname + file_format, "wb") as r:
+            r.write(book_content.content)
+            return True
+        
+    except Exception as err:
+        print(err)
+        return False
 
         
 def download_from_3(download_link, file_format):
