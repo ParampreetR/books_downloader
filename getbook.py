@@ -17,6 +17,9 @@ browser.set_handle_robots(False)
 
 
 def save_to_file(download_link, file_format, bookname=bookname):
+    """
+    Download file from download link with progress bar
+    """
     bookname = bookname.replace(" ", "_")
     
     print('[+] Download started...')
@@ -50,9 +53,7 @@ def download_from_1(download_link, file_format="epub", bookname=bookname):
         download_page = browser.response().read()
         parser = BeautifulSoup(download_page, "lxml")
         direct_download = parser.find("a").attrs["href"]
-        print(direct_download)
         save_to_file(direct_download, file_format, bookname)
-#        urllib.request.urlretrieve(direct_download, "./" + bookname + "." + file_format)
         return True
     except Exception as err:
         print(err)
@@ -100,7 +101,6 @@ def download_from_4(download_link, file_format="epub", bookname=bookname):
 def parsebookreq(bookname):
     bookname = urllib.parse.quote(bookname)
     url = f"https://libgen.is/search.php?req={bookname}&lg_topic=libgen&open=0&view=simple&res=25&phrase=1&column=def"
-    print(url)
     return url
 
 
@@ -117,14 +117,13 @@ def download_book(download_links, file_format, bookname):
     while True:
         try:
             download_from = int(input("[>] "))
-            if download_from > len(download_links):
+            if download_from > len(download_links) or download_from == 0:
                 print("[!] Please enter correct value")
                 continue
             break
 
-        except Exception as er:
+        except ValueError:
             print("[!] Invalid Input")
-            print(er)
 
     eval(f"download_from_{str(download_from)}(download_links[{download_from - 1}], file_format, bookname)")
                 
@@ -133,6 +132,8 @@ def download_book(download_links, file_format, bookname):
 # embed bookname in URI and open URI
 url = parsebookreq(bookname)
 browser.open(url)
+print("Search URL: {}\n".format(url))
+
 
 # get raw HTML and parse it by lxml parser
 html = browser.response().read()
@@ -153,7 +154,6 @@ for book in books[1:]:
     for download_elmt in raw_book_info[9:14]:
         if not download_elmt.find('a').has_attr("style"):
             download_link = download_elmt.find('a').attrs["href"]
-            print(download_link)
             download_links.append(download_link)
 
     books_details.append({
@@ -170,19 +170,19 @@ for book in books[1:]:
     serial_num += 1
 
 
+print("Results:")
 for book_details in books_details:
     print(book_details["sno"], "[" + book_details["extension"] + "]", book_details["name"], "by " + book_details["author"])
 
 while True:
     try:
         book_selected = int(input("Which book to download?\n[>] "))
-        if book_selected > len(books_details):
+        if book_selected > len(books_details) or book_selected == 0:
             print("[!] Invalid Option")
             continue
         break
-    except Exception as err:
+    except ValueError:
         print("[!] Invalid Input")
-        print(err)
 
 
 download_book(books_details[book_selected - 1]["download_links"], books_details[book_selected - 1]["extension"], books_details[book_selected - 1]["name"])
