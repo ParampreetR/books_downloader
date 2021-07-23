@@ -1,7 +1,9 @@
 #!/usr/bin/python3
-
+import requests
 import mechanize
 import urllib.parse
+
+
 try: 
     from BeautifulSoup import BeautifulSoup
 except ImportError:
@@ -9,8 +11,10 @@ except ImportError:
 
 bookname = input("Input book name: ")
 
+s = requests.Session()
 browser = mechanize.Browser()
 browser.set_handle_robots(False)
+
 
 # Download from various mirrors
 def download_from_1(download_link, file_format):
@@ -30,17 +34,37 @@ def download_from_1(download_link, file_format):
         print(err)
         return False
 
-def download_from_2(download_link, file_format):
+    
+def download_from_2(download_link, file_format="epub", bookname=bookname):
     """
     Download from mirror 2. Mirror 2 is typically a http://libgen.lc/
     """
-    pass
+    
+    if not file_format.startswith("."):
+        file_format = "." + file_format
+    bookname = bookname.replace(" ", "_")
 
+    try:
+        # THIS "s" equals s = requests.Session()
+        html = s.get(download_link).text
+        direct_download = "http://libgen.lc" + [x for x in html.split('"') if "mirr" in x][0]
+
+        book_content = s.get(direct_download)
+        with open(bookname + file_format, "wb") as r:
+            r.write(book_content.content)
+            return True
+        
+    except Exception as err:
+        print(err)
+        return False
+
+        
 def download_from_3(download_link, file_format):
     """
     Download from mirror 3. Mirror 3 is typically a https://3lib.net/
     """
     pass
+
 
 def download_from_4(download_link, file_format):
     """
@@ -48,6 +72,7 @@ def download_from_4(download_link, file_format):
     Download from mirror 4. Mirror 4 is typically a https://libgen.me/
     """
     pass
+
 
 def parsebookreq(bookname):
     bookname = urllib.parse.quote(bookname)
@@ -60,12 +85,18 @@ def download_book(download_links, file_format):
     """
     Try to download from various mirrors until successful download
     """
+    
+    print('[+] Download started...')
     if not download_from_1(download_links[0], file_format):
         if not download_from_2(download_links[1], file_format):
             if not download_from_3(download_links[2], file_format):
                 if not downlaod_from_4(download_links[3], file_format):
                     print("[-] Error")
+                    return False
+                
+    print('[+] Download successful!')                
 
+    
 # embed bookname in URI and open URI
 url = parsebookreq(bookname)
 browser.open(url)
