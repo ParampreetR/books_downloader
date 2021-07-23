@@ -16,7 +16,9 @@ browser = mechanize.Browser()
 browser.set_handle_robots(False)
 
 
-def save_to_file(download_link, file_format):
+def save_to_file(download_link, file_format, bookname=bookname):
+    bookname = bookname.replace(" ", "_")
+    
     print('[+] Download started...')
     with open(bookname + "." + file_format, "wb") as f:
         response = requests.get(download_link, stream=True)
@@ -39,7 +41,7 @@ def save_to_file(download_link, file_format):
 
 
 # Download from various mirrors
-def download_from_1(download_link, file_format):
+def download_from_1(download_link, file_format="epub", bookname=bookname):
     """
     Download from mirror 1. Mirror 1 is typically a http://library.lol
     """
@@ -49,7 +51,7 @@ def download_from_1(download_link, file_format):
         parser = BeautifulSoup(download_page, "lxml")
         direct_download = parser.find("a").attrs["href"]
         print(direct_download)
-        save_to_file(direct_download, file_format)
+        save_to_file(direct_download, file_format, bookname)
 #        urllib.request.urlretrieve(direct_download, "./" + bookname + "." + file_format)
         return True
     except Exception as err:
@@ -62,38 +64,37 @@ def download_from_2(download_link, file_format="epub", bookname=bookname):
     Download from mirror 2. Mirror 2 is typically a http://libgen.lc/
     """
     
-    if not file_format.startswith("."):
-        file_format = "." + file_format
-    bookname = bookname.replace(" ", "_")
 
     try:
         # THIS "s" equals s = requests.Session()
         html = s.get(download_link).text
         direct_download = "http://libgen.lc" + [x for x in html.split('"') if "mirr" in x][0]
 
-        book_content = s.get(direct_download)
-        with open(bookname + file_format, "wb") as r:
-            r.write(book_content.content)
-            return True
+        save_to_file(direct_download, file_format, bookname)
+        return True
         
     except Exception as err:
         print(err)
         return False
 
         
-def download_from_3(download_link, file_format):
+def download_from_3(download_link, file_format="epub", bookname=bookname):
     """
     Download from mirror 3. Mirror 3 is typically a https://3lib.net/
     """
-    pass
+    print("[!] Currently not supported")
+    print("[*] Downloading from mirror 1")
+    download_from_1(download_link, file_format, bookname)
 
 
-def download_from_4(download_link, file_format):
+def download_from_4(download_link, file_format="epub", bookname=bookname):
     """
     (broken at time of writing this code)
     Download from mirror 4. Mirror 4 is typically a https://libgen.me/
     """
-    pass
+    print("[!] Currently not supported")
+    print("[*] Downloading from mirror 1")
+    download_from_1(download_link, file_format, bookname)
 
 
 def parsebookreq(bookname):
@@ -103,17 +104,29 @@ def parsebookreq(bookname):
     return url
 
 
-def download_book(download_links, file_format):
+def download_book(download_links, file_format, bookname):
     """
     Try to download from various mirrors until successful download
     """
-    
-    if not download_from_1(download_links[0], file_format):
-        if not download_from_2(download_links[1], file_format):
-            if not download_from_3(download_links[2], file_format):
-                if not downlaod_from_4(download_links[3], file_format):
-                    print("[-] Error")
-                    return False
+    print("[*] Total Available Mirrors: {}".format(len(download_links)))
+
+    for i in range(0, len(download_links)):
+        print(i + 1 ,download_links[i])
+
+
+    while True:
+        try:
+            download_from = int(input("[>] "))
+            if download_from > len(download_links):
+                print("[!] Please enter correct value")
+                continue
+            break
+
+        except Exception as er:
+            print("[!] Invalid Input")
+            print(er)
+
+    eval(f"download_from_{str(download_from)}(download_links[{download_from - 1}], file_format, bookname)")
                 
 
     
@@ -129,6 +142,7 @@ parsed_html = BeautifulSoup(html, 'lxml')
 books = parsed_html.body.find_all('tr', attrs={'valign':'top'})
 
 books_details = []
+serial_num = 1
 
 # Iterate all books to fill list of books_details
 for book in books[1:]:
@@ -137,12 +151,13 @@ for book in books[1:]:
     # Get all download links in list
     download_links = []
     for download_elmt in raw_book_info[9:14]:
-        if not download_elmt.has_attr("style"):
+        if not download_elmt.find('a').has_attr("style"):
             download_link = download_elmt.find('a').attrs["href"]
             print(download_link)
             download_links.append(download_link)
 
     books_details.append({
+        "sno": serial_num,
         "name": raw_book_info[2].text,
         "author": raw_book_info[1].text,
         "publisher": raw_book_info[3].text,
@@ -152,11 +167,22 @@ for book in books[1:]:
         "extension": raw_book_info[8].text,
         "download_links": download_links
     })
+    serial_num += 1
 
-print(books_details)
 
-for book_details in books_details[:2]:
-    if book_details["extension"] == "pdf":
-        download_book(book_details["download_links"], book_details["extension"])
-    else:
-        print(book_details["extension"])
+for book_details in books_details:
+    print(book_details["sno"], "[" + book_details["extension"] + "]", book_details["name"], "by " + book_details["author"])
+
+while True:
+    try:
+        book_selected = int(input("Which book to download?\n[>] "))
+        if book_selected > len(books_details):
+            print("[!] Invalid Option")
+            continue
+        break
+    except Exception as err:
+        print("[!] Invalid Input")
+        print(err)
+
+
+download_book(books_details[book_selected - 1]["download_links"], books_details[book_selected - 1]["extension"], books_details[book_selected - 1]["name"])
