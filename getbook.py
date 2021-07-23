@@ -2,7 +2,7 @@
 import requests
 import mechanize
 import urllib.parse
-
+import sys
 
 try: 
     from BeautifulSoup import BeautifulSoup
@@ -16,11 +16,32 @@ browser = mechanize.Browser()
 browser.set_handle_robots(False)
 
 
+def save_to_file(download_link, file_format):
+    print('[+] Download started...')
+    with open(bookname + "." + file_format, "wb") as f:
+        response = requests.get(download_link, stream=True)
+        total_length = response.headers.get('content-length')
+
+        # If no content length header
+        if total_length is None:
+            f.write(response.content)
+        else:
+            dl = 0
+            total_length = int(total_length)
+            for data in response.iter_content(chunk_size=4096):
+                dl += len(data)
+                f.write(data)
+                done = int(50 * dl / total_length)
+                sys.stdout.write('\r[{}{}]'.format('█' * done, '.' * (50 - done)))
+                sys.stdout.flush()
+
+    print('\n[+] Download successful!')
+
+
 # Download from various mirrors
 def download_from_1(download_link, file_format):
     """
     Download from mirror 1. Mirror 1 is typically a http://library.lol
-
     """
     try:
         browser.open(download_link)
@@ -28,7 +49,8 @@ def download_from_1(download_link, file_format):
         parser = BeautifulSoup(download_page, "lxml")
         direct_download = parser.find("a").attrs["href"]
         print(direct_download)
-        urllib.request.urlretrieve(direct_download, "./" + bookname + "." + file_format)
+        save_to_file(direct_download, file_format)
+#        urllib.request.urlretrieve(direct_download, "./" + bookname + "." + file_format)
         return True
     except Exception as err:
         print(err)
@@ -86,7 +108,6 @@ def download_book(download_links, file_format):
     Try to download from various mirrors until successful download
     """
     
-    print('[+] Download started...')
     if not download_from_1(download_links[0], file_format):
         if not download_from_2(download_links[1], file_format):
             if not download_from_3(download_links[2], file_format):
@@ -94,7 +115,6 @@ def download_book(download_links, file_format):
                     print("[-] Error")
                     return False
                 
-    print('[+] Download successful!')                
 
     
 # embed bookname in URI and open URI
