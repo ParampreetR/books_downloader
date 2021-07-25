@@ -64,8 +64,6 @@ def download_from_2(download_link, file_format="epub", bookname=bookname):
     """
     Download from mirror 2. Mirror 2 is typically a http://libgen.lc/
     """
-    
-
     try:
         # THIS "s" equals s = requests.Session()
         html = s.get(download_link).text
@@ -84,8 +82,6 @@ def download_from_3(download_link, file_format="epub", bookname=bookname):
     Download from mirror 3. Mirror 3 is typically a https://3lib.net/
     """
     print("[!] Currently not supported")
-    print("[*] Downloading from mirror 1")
-    download_from_1(download_link, file_format, bookname)
 
 
 def download_from_4(download_link, file_format="epub", bookname=bookname):
@@ -94,9 +90,13 @@ def download_from_4(download_link, file_format="epub", bookname=bookname):
     Download from mirror 4. Mirror 4 is typically a https://libgen.me/
     """
     print("[!] Currently not supported")
-    print("[*] Downloading from mirror 1")
-    download_from_1(download_link, file_format, bookname)
 
+def download_from_5(download_link, file_format="epub", bookname=bookname):
+    """
+    (broken at time of writing this code)
+    Download from mirror 5. Mirror 5 is typically a http://bookfi.net/
+    """
+    print("[!] Currently not supported")
 
 def parsebookreq(bookname):
     bookname = urllib.parse.quote(bookname)
@@ -110,22 +110,25 @@ def download_book(download_links, file_format, bookname):
     """
     print("[*] Total Available Mirrors: {}".format(len(download_links)))
 
-    for i in range(0, len(download_links)):
-        print(i + 1 ,download_links[i])
 
+    downloaded = False
+    
+    while not downloaded:    
+        for i in range(0, len(download_links)):
+            print(i + 1 ,download_links[i])
 
-    while True:
-        try:
-            download_from = int(input("[>] "))
-            if download_from > len(download_links) or download_from == 0:
-                print("[!] Please enter correct value")
-                continue
-            break
+        while True:
+            try:
+                download_from = int(input("[>] "))
+                if download_from > len(download_links) or download_from == 0:
+                    print("[!] Please enter correct value")
+                    continue
+                break
 
-        except ValueError:
-            print("[!] Invalid Input")
+            except ValueError:
+                print("[!] Invalid Input")
 
-    eval(f"download_from_{str(download_from)}(download_links[{download_from - 1}], file_format, bookname)")
+        downloaded = eval(f"download_from_{str(download_from)}(download_links[{download_from - 1}], file_format, bookname)")        
                 
 
     
