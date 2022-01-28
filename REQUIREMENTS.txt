@@ -1,4 +1,3 @@
-urllib
 mechanize
 beautifulsoup4
 requests
