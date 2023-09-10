@@ -1,19 +1,22 @@
 #!/usr/bin/python3
 import requests
-import mechanize
 import urllib.parse
 import sys
+import threading
+import argparse
 
 try: 
     from BeautifulSoup import BeautifulSoup
 except ImportError:
     from bs4 import BeautifulSoup
 
-bookname = input("Input book name: ")
+bookname = ""
+books = [0, 0]
+books_details = []
+pgno = 0
 
 s = requests.Session()
-browser = mechanize.Browser()
-browser.set_handle_robots(False)
+request_lock = threading.Lock()
 
 
 def save_to_file(download_link, file_format, bookname=bookname):
@@ -37,7 +40,7 @@ def save_to_file(download_link, file_format, bookname=bookname):
                 dl += len(data)
                 f.write(data)
                 done = int(50 * dl / total_length)
-                sys.stdout.write('\r[{}{}]'.format('█' * done, '.' * (50 - done)))
+                sys.stdout.write('\r[{}{}]'.format('Shipped█' * done, '.' * (50 - done)))
                 sys.stdout.flush()
 
     print('\n[+] Download successful!')
@@ -49,8 +52,8 @@ def download_from_1(download_link, file_format="epub", bookname=bookname):
     Download from mirror 1. Mirror 1 is typically a http://library.lol
     """
     try:
-        browser.open(download_link)
-        download_page = browser.response().read()
+        response = requests.get(download_link)
+        download_page = response.text
         parser = BeautifulSoup(download_page, "lxml")
         direct_download = parser.find("a").attrs["href"]
         save_to_file(direct_download, file_format, bookname)
@@ -98,9 +101,9 @@ def download_from_5(download_link, file_format="epub", bookname=bookname):
     """
     print("[!] Currently not supported")
 
-def parsebookreq(bookname):
+def parsebookreq(bookname, pagenum = 1):
     bookname = urllib.parse.quote(bookname)
-    url = f"https://libgen.is/search.php?req={bookname}&lg_topic=libgen&open=0&view=simple&res=25&phrase=1&column=def"
+    url = f"https://libgen.is/search.php?req={bookname}&lg_topic=libgen&open=0&view=simple&res=25&phrase=1&column=def&page={pagenum}"
     return url
 
 
@@ -131,47 +134,122 @@ def download_book(download_links, file_format, bookname):
         downloaded = eval(f"download_from_{str(download_from)}(download_links[{download_from - 1}], file_format, bookname)")        
                 
 
-    
-# embed bookname in URI and open URI
-url = parsebookreq(bookname)
-browser.open(url)
-print("Search URL: {}\n".format(url))
+def parseargs():
+    global bookname
+    parser = argparse.ArgumentParser(description="Download book from library Genesis with filters")
+    parser.add_argument('bookname', type=str, help="name of the book to download")
+    parser.add_argument('--author', type=str, help="author of the book to download")
+    parser.add_argument('--publisher', type=str, help="publisher of the book to download")
+    parser.add_argument('--year', type=str, help="publish year of the book to download")
+    parser.add_argument('--extension', type=str, help="extension of the book to download")
 
+    args = parser.parse_args()
+    bookname = args.bookname
+    if args.extension != None:
+        args.extension = args.extension.strip(".")
+    print(args)
+    return args
+
+
+def filter_books(books, args):
+    filtered_books = []
+    for book in books:
+        if args.author != None:
+            if not args.author.lower() in book["author"].lower():
+                continue
+
+        if args.year != None:
+            if not args.year.lower() in book["year_published"].lower():
+                continue
+
+        if args.publisher != None:
+            if not args.publisher.lower() in book["publisher"].lower():
+                continue
+
+        if args.extension != None:
+            if not args.extension.lower() in book["extension"].lower():
+                continue
+
+        filtered_books.append(book)
+    
+    return filtered_books
+
+
+
+def search_worker(bookname, pg_no):
+    # embed bookname in URI and open URI
+    url = parsebookreq(bookname, pg_no)
+    request_lock.acquire(True)
+
+    
+    response = requests.get(url)
+
+    request_lock.release()
+    print("Search URL: {}".format(url))
+
+    # get raw HTML and parse it by lxml parser
+    html = response.text
+    parsed_html = BeautifulSoup(html, 'lxml')
+
+    # find all <tr valign="top">
+    books = parsed_html.body.find_all('tr', attrs={'valign':'top'})
+
+    serial_num = 1
+
+    # Iterate all books to fill list of books_details
+    for book in books[1:]:
+        raw_book_info = book.find_all("td")
+        
+        # Get all download links in list
+        download_links = []
+        for download_elmt in raw_book_info[9:14]:
+            if not download_elmt.find('a').has_attr("style"):
+                download_link = download_elmt.find('a').attrs["href"]
+                download_links.append(download_link)
+
+        books_details.append({
+            "sno": serial_num + (pg_no - 1) * 25,
+            "name": raw_book_info[2].text,
+            "author": raw_book_info[1].text,
+            "publisher": raw_book_info[3].text,
+            "year_published": raw_book_info[4].text,
+            "pages": raw_book_info[5].text,
+            "size": raw_book_info[7].text,
+            "extension": raw_book_info[8].text,
+            "download_links": download_links
+        })
+        serial_num += 1
+
+
+args = parseargs()
+threads = []
+url = parsebookreq(bookname)
+response = requests.get(url)
 
 # get raw HTML and parse it by lxml parser
-html = browser.response().read()
+html = response.text
 parsed_html = BeautifulSoup(html, 'lxml')
 
 # find all <tr valign="top">
-books = parsed_html.body.find_all('tr', attrs={'valign':'top'})
+page_len = int(parsed_html.body.find('font', attrs={'color':'grey', 'size': '1'}).text.split(" ")[0])
+pages = int(page_len / 25 + 1)
 
-books_details = []
-serial_num = 1
+for pgno in range(1, pages):
+    threads.append(threading.Thread(target=search_worker, args=(bookname, pgno)))
 
-# Iterate all books to fill list of books_details
-for book in books[1:]:
-    raw_book_info = book.find_all("td")
-    
-    # Get all download links in list
-    download_links = []
-    for download_elmt in raw_book_info[9:14]:
-        if not download_elmt.find('a').has_attr("style"):
-            download_link = download_elmt.find('a').attrs["href"]
-            download_links.append(download_link)
+for thread in threads:
+    thread.start()
 
-    books_details.append({
-        "sno": serial_num,
-        "name": raw_book_info[2].text,
-        "author": raw_book_info[1].text,
-        "publisher": raw_book_info[3].text,
-        "year_published": raw_book_info[4].text,
-        "pages": raw_book_info[5].text,
-        "size": raw_book_info[7].text,
-        "extension": raw_book_info[8].text,
-        "download_links": download_links
-    })
-    serial_num += 1
+for thread in threads:
+    thread.join()
 
+# books_details = books_details.sort(key=lambda x: x["sno"], reverse=True)
+
+books_details = filter_books(books_details, args)
+
+if len(books_details) == 0:
+    print("No Results found")
+    exit(0)
 
 print("Results:")
 for book_details in books_details:
