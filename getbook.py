@@ -40,7 +40,7 @@ def save_to_file(download_link, file_format, bookname=bookname):
                 dl += len(data)
                 f.write(data)
                 done = int(50 * dl / total_length)
-                sys.stdout.write('\r[{}{}]'.format('Shipped█' * done, '.' * (50 - done)))
+                sys.stdout.write('\r[{}{}]'.format('█' * done, '.' * (50 - done)))
                 sys.stdout.flush()
 
     print('\n[+] Download successful!')
@@ -141,6 +141,7 @@ def parseargs():
     parser.add_argument('--author', type=str, help="author of the book to download")
     parser.add_argument('--publisher', type=str, help="publisher of the book to download")
     parser.add_argument('--year', type=str, help="publish year of the book to download")
+    parser.add_argument('--savecsv', type=str, help="save all retrieved books to CSV file")
     parser.add_argument('--extension', type=str, help="extension of the book to download")
 
     args = parser.parse_args()
@@ -209,16 +210,26 @@ def search_worker(bookname, pg_no):
 
         books_details.append({
             "sno": serial_num + (pg_no - 1) * 25,
-            "name": raw_book_info[2].text,
-            "author": raw_book_info[1].text,
-            "publisher": raw_book_info[3].text,
-            "year_published": raw_book_info[4].text,
-            "pages": raw_book_info[5].text,
-            "size": raw_book_info[7].text,
-            "extension": raw_book_info[8].text,
+            "name": raw_book_info[2].text.strip(","),
+            "author": raw_book_info[1].text.strip(","),
+            "publisher": raw_book_info[3].text.strip(","),
+            "year_published": raw_book_info[4].text.strip(","),
+            "pages": raw_book_info[5].text.strip(","),
+            "size": raw_book_info[7].text.strip(","),
+            "extension": raw_book_info[8].text.strip(","),
             "download_links": download_links
         })
         serial_num += 1
+
+
+def save_csv():
+    book_csv_list = []
+    for book in books_details:
+        book_csv_list.append(f"{book['sno']},{book['name']},{book['author']},{book['publisher']},{book['year_published']},{book['pages']},{book['size']},{book['extension']},{' - '.join(book['download_links'])}\n")
+
+    with open(args.savecsv, "w") as f:
+        f.writelines(book_csv_list)
+    
 
 
 args = parseargs()
@@ -251,9 +262,14 @@ if len(books_details) == 0:
     print("No Results found")
     exit(0)
 
+
+if args.savecsv:
+    save_csv()
+
+
 print("Results:")
-for book_details in books_details:
-    print(book_details["sno"], "[" + book_details["extension"] + "]", book_details["name"], "by " + book_details["author"])
+for index, book_details in enumerate(books_details):
+    print(index + 1, " [" + book_details["extension"] + "]", book_details["name"], "by " + book_details["author"])
 
 while True:
     try:
