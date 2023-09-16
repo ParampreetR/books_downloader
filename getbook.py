@@ -1,9 +1,9 @@
 #!/usr/bin/python3
 import requests
 import urllib.parse
-import sys
 import threading
 import argparse
+import progressbar
 
 try: 
     from BeautifulSoup import BeautifulSoup
@@ -14,9 +14,16 @@ bookname = ""
 books = [0, 0]
 books_details = []
 pgno = 0
+verbose = False
 
 s = requests.Session()
 request_lock = threading.Lock()
+
+
+def verbose_print(*args):
+    if verbose:
+        print(*args)
+
 
 
 def save_to_file(download_link, file_format, bookname=bookname):
@@ -27,8 +34,10 @@ def save_to_file(download_link, file_format, bookname=bookname):
     
     print('[+] Download started...')
     with open(bookname + "." + file_format, "wb") as f:
-        response = requests.get(download_link, stream=True)
+        response = requests.get(download_link, stream=True, timeout=10)
         total_length = response.headers.get('content-length')
+
+        bar = progressbar.ProgressBar(max_value=int(total_length)).start()
 
         # If no content length header
         if total_length is None:
@@ -39,11 +48,10 @@ def save_to_file(download_link, file_format, bookname=bookname):
             for data in response.iter_content(chunk_size=4096):
                 dl += len(data)
                 f.write(data)
-                done = int(50 * dl / total_length)
-                sys.stdout.write('\r[{}{}]'.format('█' * done, '.' * (50 - done)))
-                sys.stdout.flush()
+                bar.update(dl)
 
-    print('\n[+] Download successful!')
+
+    bar.finish()
 
 
 # Download from various mirrors
@@ -143,12 +151,16 @@ def parseargs():
     parser.add_argument('--year', type=str, help="publish year of the book to download")
     parser.add_argument('--savecsv', type=str, help="save all retrieved books to CSV file")
     parser.add_argument('--extension', type=str, help="extension of the book to download")
+    parser.add_argument('--verbose', type=bool, help="extension of the book to download")
 
     args = parser.parse_args()
     bookname = args.bookname
     if args.extension != None:
         args.extension = args.extension.strip(".")
-    print(args)
+
+    if args.verbose:
+        verbose = True
+
     return args
 
 
@@ -181,12 +193,8 @@ def search_worker(bookname, pg_no):
     # embed bookname in URI and open URI
     url = parsebookreq(bookname, pg_no)
     request_lock.acquire(True)
-
-    
     response = requests.get(url)
-
     request_lock.release()
-    print("Search URL: {}".format(url))
 
     # get raw HTML and parse it by lxml parser
     html = response.text
@@ -243,29 +251,41 @@ parsed_html = BeautifulSoup(html, 'lxml')
 
 # find all <tr valign="top">
 page_len = int(parsed_html.body.find('font', attrs={'color':'grey', 'size': '1'}).text.split(" ")[0])
-pages = int(page_len / 25 + 1)
+pages = int(page_len / 25 + 1) + 1
 
+verbose_print("[*] Searching in {} pages".format(pages))
+
+verbose_print("[*] Starting {} threads".format(pages - 1))
 for pgno in range(1, pages):
     threads.append(threading.Thread(target=search_worker, args=(bookname, pgno)))
 
 for thread in threads:
     thread.start()
 
-for thread in threads:
+verbose_print("[*] Waiting for threads to finish...")
+
+bar = progressbar.ProgressBar(max_value=len(threads)).start()
+
+for index, thread in enumerate(threads):
+    bar.update(index + 1)
     thread.join()
 
+print("")
 # books_details = books_details.sort(key=lambda x: x["sno"], reverse=True)
 
+verbose_print("[*] Found {} results before applying filters".format(len(books_details)))
 books_details = filter_books(books_details, args)
+verbose_print("[*] Found {} results after filtering".format(len(books_details)))
+
 
 if len(books_details) == 0:
-    print("No Results found")
+    print("- No result found")
     exit(0)
 
 
 if args.savecsv:
+    verbose_print("[*] Saving data to csv file")
     save_csv()
-
 
 print("Results:")
 for index, book_details in enumerate(books_details):
