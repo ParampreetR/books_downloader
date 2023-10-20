@@ -270,6 +270,8 @@ for index, thread in enumerate(threads):
     bar.update(index + 1)
     thread.join()
 
+bar.finish()
+
 print("")
 # books_details = books_details.sort(key=lambda x: x["sno"], reverse=True)
 
